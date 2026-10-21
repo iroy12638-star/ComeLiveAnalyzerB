@@ -1,21 +1,19 @@
-name: Build ComeLiveAnalyzerB
+name: Build Come Live Analyzer APK
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -24,33 +22,35 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Locate Android project
-        shell: bash
+      - name: Extract Android project
         run: |
-          echo "Checking project files..."
-          find . -maxdepth 4 -type f | sort | head -200
-          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            echo "ERROR: Android project not found in repository root."
+          mkdir android-project
+          unzip -o ComeLiveAnalyzerB_source.zip -d android-project
+          echo "Extracted files:"
+          find android-project -maxdepth 4 -type f
+
+      - name: Find project root
+        run: |
+          PROJECT_DIR=$(find android-project -name settings.gradle -type f | head -1 | xargs dirname)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: settings.gradle not found in ZIP"
             exit 1
           fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Build debug APK
-        shell: bash
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug
-          else
-            gradle assembleDebug
-          fi
+          cd "$PROJECT_DIR"
+          gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ComeLiveAnalyzerB-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: android-project/**/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 7
